@@ -3,6 +3,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const dbConnected = require('./dbConfig');
 const userModel = require('./userDetails'); // Fixed spelling issue from "modles" to "models"
+const AddToyScheema = require('./toyAddProductScheema');
+const { get } = require('mongoose');
 
 // Load environment variables
 dotenv.config();
@@ -120,6 +122,32 @@ app.post('/updateUser/:id', async (req, res) => {
         console.error("Error updating user:", error); // ✅ Logs actual error
         res.status(500).json({ message: "User not updated", error: error.message }); // ✅ Returns detailed error message
     }
+});
+
+app.get('/category', async (req, res) => {
+    try {
+        const allCategories = await AddToyScheema.distinct("Category");
+        res.status(200).json({ data: allCategories, message: "Categories fetched successfully" });
+    } catch (error) {
+        console.error("Error fetching categories:", error);
+        res.status(500).send("Internal Server Error");
+    }
+}
+);
+
+app.get('/products', async (req, res) => {
+    try {
+       
+        const getAllToys = await AddToyScheema.find()
+            
+            res.status(200).json({ data: getAllToys, message: "Toys fetched successfully" });
+        
+    } 
+    catch (error) {
+        console.error("Error fetching toys:", error);
+        res.status(500).send("Internal Server Error");
+    }
+    // res.render('index');
 });
 // Start the server
 dbConnected()
