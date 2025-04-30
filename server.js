@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 const dbConnected = require('./dbConfig');
 const userModel = require('./userDetails'); // Fixed spelling issue from "modles" to "models"
 const AddToyScheema = require('./toyAddProductScheema');
-const { get } = require('mongoose');
+const userCart = require('./cartSchema');
 
 // Load environment variables
 dotenv.config();
@@ -149,6 +149,138 @@ app.get('/products', async (req, res) => {
     }
     // res.render('index');
 });
+
+app.post('/add-to-cart', async (req, res) => {
+    try {
+      const { product, userId } = req.body;
+      const quantityToAdd = parseInt(product.quantity) || parseInt(product.MinimumOrderQuantity) || 1;
+  
+      let cartItem = await userCart.findOne({ userId, productId: product._id });
+      // console.log("Product received:", product);
+  
+      if (cartItem) {
+        cartItem.quantity = quantityToAdd;
+        await cartItem.save();
+      } else {
+        cartItem = new userCart({
+          userId,
+          productId: product._id,
+          quantity: quantityToAdd,
+          createdAt: new Date(),
+        });
+        await cartItem.save();
+      }
+  
+      res.status(200).json({
+        message: 'Item added to cart!',
+        item: cartItem, // ✅ Return the updated or new cart item
+      });
+    } catch (err) {
+      console.error('Error adding to cart:', err);
+      res.status(500).json({ message: 'Failed to add item to cart' });
+    }
+  });
+  
+  
+
+  app.post('/remove-from-cart', async (req, res) => {
+    const { productId, userId } = req.body;
+  
+    if (!productId || !userId) {
+      return res.status(400).json({ message: 'Missing productId or userId' });
+    }
+  
+    try {
+      const item = await userCart.findOne({ userId, productId });
+      if (!item) {
+        return res.status(404).json({ message: 'Item not found in cart' });
+      }
+  
+      const product = await AddToyScheema.findById(productId);
+      if (!product) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+  
+      const qtyToRemove = parseInt(product.MinimumOrderQuantity) || 1;
+      item.quantity -= qtyToRemove;
+  
+      if (item.quantity <= 0) {
+        await userCart.deleteOne({ _id: item._id });
+        return res.status(200).json({ message: 'Item removed from cart completely' });
+      } else {
+        await item.save();
+        return res.status(200).json({
+          message: 'Item quantity reduced',
+          item: item, // Optional: return updated item
+        });
+      }
+    } catch (err) {
+      console.error('Error removing from cart:', err);
+      res.status(500).json({ message: 'Failed to remove item from cart' });
+    }
+  });
+  
+  
+  
+  app.post('/details', async (req, res) => {
+    try {
+      const { itemIds } = req.body;
+  
+      if (!Array.isArray(itemIds) || itemIds.length === 0) {
+        return res.status(400).json({ error: 'No item IDs provided' });
+      }
+  
+      // Fetch product details from DB using the IDs
+      const products = await AddToyScheema.find({ _id: { $in: itemIds } });
+      console.log(products)
+      // Return full product data
+      return res.json(products);
+    } catch (error) {
+      console.error('Error in /cart/details:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.get('/cart', async (req, res) => {
+    try {
+      const { userId } = req.query; // ✅ should be from query
+      const cart = await userCart.find({ userId });
+        
+      if (!cart || cart.length === 0) {
+        return res.status(200).json([]); // ✅ return empty array
+      }
+      res.status(200).json(cart); // ✅ return full cart
+    } catch (err) {
+      console.error("Error fetching cart:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+  
+  app.post('/remove-from-cart', async (req, res) => {
+    const { productId, userId } = req.body;
+  
+    if (!productId || !userId) {
+      return res.status(400).json({ message: 'Missing productId or userId' });
+    }
+  
+    try {
+      // Find the cart item for the given userId and productId
+      const item = await userCart.findOne({ userId, productId });
+      if (!item) {
+        return res.status(404).json({ message: 'Item not found in cart' });
+      }
+  
+      // Delete the item from the cart
+      await userCart.deleteOne({ _id: item._id });
+      
+      return res.status(200).json({ message: 'Item removed from cart completely' });
+    } catch (err) {
+      console.error('Error removing from cart:', err);
+      res.status(500).json({ message: 'Failed to remove item from cart' });
+    }
+  });
+  
+
 // Start the server
 dbConnected()
     .then(() => {
