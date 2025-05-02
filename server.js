@@ -2,11 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const dbConnected = require('./dbConfig');
-const userModel = require('./userDetails'); // Fixed spelling issue from "modles" to "models"
+const userModel = require('./userDetails'); 
 const AddToyScheema = require('./toyAddProductScheema');
 const userCart = require('./cartSchema');
-
-// Load environment variables
+const orderSchema = require('./orderSchema'); 
+const mongoose = require('mongoose');
 dotenv.config();
 
 const app = express();
@@ -183,7 +183,7 @@ app.post('/add-to-cart', async (req, res) => {
   
   
 
-  app.post('/remove-from-cart', async (req, res) => {
+  app.post('/delete-from-cart', async (req, res) => {
     const { productId, userId } = req.body;
   
     if (!productId || !userId) {
@@ -280,7 +280,73 @@ app.post('/add-to-cart', async (req, res) => {
     }
   });
   
+  app.post('/clear-cart', async (req, res) => {
+    const { userId } = req.body;
+  
+    if (!userId) {
+      return res.status(400).json({ message: 'Missing userId' });
+    }
+  
+    try {
+      // Delete all items in the cart for the given userId
+      await userCart.deleteMany({ userId });
+  
+      return res.status(200).json({ message: 'Cart cleared successfully' });
+    } catch (err) {
+      console.error('Error clearing cart:', err);
+      res.status(500).json({ message: 'Failed to clear cart' });
+    }
+  });
 
+ // adjust path accordingly
+  
+ app.post('/order', async (req, res) => {
+  try {
+    const { orderDetails } = req.body;
+
+    if (!orderDetails) {
+      return res.status(400).json({ message: "Order details are required" });
+    }
+
+    const { userId, items } = orderDetails;
+
+    if (!userId || !items || !Array.isArray(items)) {
+      return res.status(400).json({ message: "userId and valid items are required" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid userId" });
+    }
+
+    // Validate product IDs
+    const invalidProducts = [];
+    for (const item of items) {
+      const product = await AddToyScheema.findById(item.productId);
+      if (!product) {
+        invalidProducts.push(item.productId);
+      }
+    }
+
+    if (invalidProducts.length > 0) {
+      return res.status(400).json({ message: `Invalid product(s) found: ${invalidProducts.join(', ')}` });
+    }
+    console.log(items)
+    const newOrder = new orderSchema({
+      userId,
+      cartItems: items, // Add cart items
+    });
+
+    await newOrder.save();
+
+    res.status(200).json({ message: "Order placed successfully", order: newOrder });
+  } catch (error) {
+    console.error('Error placing order:', error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
+  
 // Start the server
 dbConnected()
     .then(() => {
